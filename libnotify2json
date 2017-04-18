@@ -1,0 +1,82 @@
+#!/usr/bin/perl
+
+use JSON;
+
+use warnings;
+use strict;
+
+sub read_string () {
+    $_ = <>;
+    chomp;
+    die "string expected" if !/^\s*string\s*"(.*)/;
+    my $text = $1;
+    if ($text =~ /(.*?)"$/) {
+        return $1;
+    } else {
+        my $r = "$text\n";
+        while ($text !~ /"$/) {
+            $text = <>;
+            chomp $text;
+
+            if ($text =~ /(.*?)"$/) {
+                $r .= $1;
+            } else {
+                $r .= "$text\n";
+            }
+        }
+        return $r;
+    }
+}
+
+sub read_uint32 () {
+    $_ = <>;
+    chomp;
+    die "uint32 expected" if !/^\s*uint32\s*(\d+)/;
+    return $1;
+}
+
+sub print_json ($) {
+    my $msg = to_json ($_[0], { utf8  => 1, pretty => 1});
+    my $length = length $msg;
+    print "$length\n$msg";
+}
+
+my %messages;
+
+while (<>) {
+    if (/ member=Notify/) {
+        my ($serial) = $_ =~ / serial=(\d+)/;
+        my $prog = read_string ();
+        read_uint32 ();
+        read_string ();
+        my $title = read_string ();
+        my $text = read_string ();
+        $messages{$serial} = {
+            type => 'notify',
+            prog => $prog,
+            title => $title,
+            text => $text
+        };
+    } elsif (/^method return/) {
+        my ($serial) = $_ =~ / reply_serial=(\d+)/;
+        if (defined $serial && exists $messages{$serial}) {
+            my $id = read_uint32();
+            $messages{$serial}{message_id} = $id;
+            print_json ($messages{$serial})
+        }
+    } elsif (/ member=NotificationClosed/) {
+        my $id = read_uint32();
+        my $reason = read_uint32();
+
+        if (defined $id) {
+            my $serial = (map { $_ } (grep { $messages{$_}->{message_id} == $id } (keys %messages)))[0];
+            if (defined $serial) {
+                $messages{$serial}->{type} = 'close';
+                $messages{$serial}->{close_reason} = $reason;
+                
+                print_json ($messages{$serial});
+                delete $messages{$serial};
+            }
+        }
+    }
+}
