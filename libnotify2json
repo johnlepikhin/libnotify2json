@@ -10,7 +10,7 @@ $|++;
 sub read_string () {
     $_ = <>;
     chomp;
-    die "string expected" if !/^\s*string\s*"(.*)/;
+    die "string expected, got: $_" if !/^\s*string\s*"(.*)/;
     my $text = $1;
     if ($text =~ /(.*?)"$/) {
         return $1;
@@ -46,38 +46,44 @@ sub print_json ($) {
 my %messages;
 
 while (<>) {
-    if (/ member=Notify/) {
+    if (/ member=Notify/ && /interface=org.freedesktop.Notifications/) {
         my ($serial) = $_ =~ / serial=(\d+)/;
-        my $prog = read_string ();
-        read_uint32 ();
-        read_string ();
-        my $title = read_string ();
-        my $text = read_string ();
-        $messages{$serial} = {
-            type => 'notify',
-            prog => $prog,
-            title => $title,
-            text => $text
-        };
+        eval {
+            my $prog = read_string ();
+            read_uint32 ();
+            read_string ();
+            my $title = read_string ();
+            my $text = read_string ();
+            $messages{$serial} = {
+                type => 'notify',
+                prog => $prog,
+                title => $title,
+                text => $text
+            };
+        }
     } elsif (/^method return/) {
         my ($serial) = $_ =~ / reply_serial=(\d+)/;
         if (defined $serial && exists $messages{$serial}) {
-            my $id = read_uint32();
-            $messages{$serial}{message_id} = $id;
-            print_json ($messages{$serial})
+            eval {
+                my $id = read_uint32();
+                $messages{$serial}{message_id} = $id;
+                print_json ($messages{$serial})
+            }
         }
-    } elsif (/ member=NotificationClosed/) {
-        my $id = read_uint32();
-        my $reason = read_uint32();
+    } elsif (/ member=NotificationClosed/ && /interface=org.freedesktop.Notifications/) {
+        eval {
+            my $id = read_uint32();
+            my $reason = read_uint32();
 
-        if (defined $id) {
-            my $serial = (map { $_ } (grep { $messages{$_}->{message_id} == $id } (keys %messages)))[0];
-            if (defined $serial) {
-                $messages{$serial}->{type} = 'close';
-                $messages{$serial}->{close_reason} = $reason;
-                
-                print_json ($messages{$serial});
-                delete $messages{$serial};
+            if (defined $id) {
+                my $serial = (map { $_ } (grep { $messages{$_}->{message_id} == $id } (keys %messages)))[0];
+                if (defined $serial) {
+                    $messages{$serial}->{type} = 'close';
+                    $messages{$serial}->{close_reason} = $reason;
+                    
+                    print_json ($messages{$serial});
+                    delete $messages{$serial};
+                }
             }
         }
     }
