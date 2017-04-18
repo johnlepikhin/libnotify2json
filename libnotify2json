@@ -5,6 +5,8 @@ use JSON;
 use warnings;
 use strict;
 
+$|++;
+
 sub read_string () {
     $_ = <>;
     chomp;
