@@ -38,7 +38,7 @@ sub read_uint32 () {
 }
 
 sub print_json ($) {
-    my $msg = to_json ($_[0], { utf8  => 1, pretty => 1});
+    my $msg = to_json ($_[0], { utf8  => 0, pretty => 1});
     my $length = length $msg;
     print "$length\n$msg";
 }
